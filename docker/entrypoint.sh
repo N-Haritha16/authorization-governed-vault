@@ -1,11 +1,14 @@
 #!/bin/sh
 set -e
 
-echo "Compiling contracts..."
-npx hardhat compile
+# 1) start hardhat node
+npx hardhat node --hostname 0.0.0.0 &
+HARDHAT_PID=$!
 
-echo "Deploying contracts..."
-npx hardhat run scripts/deploy.js --network localhost
+sleep 10
 
-echo "Deployment completed"
-tail -f /dev/null
+# 2) deploy using package.json script
+npm run deploy
+
+# 3) keep node alive
+wait $HARDHAT_PID

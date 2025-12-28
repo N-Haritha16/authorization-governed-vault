@@ -2,9 +2,17 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-COPY package.json package-lock.json ./
+# install deps
+COPY package.json ./
 RUN npm install
 
+# copy rest of project
 COPY . .
 
-CMD ["sh", "./docker/entrypoint.sh"]
+# compile contracts (optional but good)
+RUN npx hardhat compile
+
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
