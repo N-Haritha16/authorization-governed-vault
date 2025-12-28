@@ -7,8 +7,10 @@ services:
     ports:
       - "8545:8545"
     command:
-      - --chainId
-      - "1337"
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8545"
       - --accounts
       - "10"
       - --defaultBalanceEther
