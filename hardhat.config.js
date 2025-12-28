@@ -1,3 +1,4 @@
+// hardhat.config.js
 require("@nomicfoundation/hardhat-toolbox");
 
 module.exports = {
