@@ -1,0 +1,38 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json.*
+
+# Hardhat artifacts & cache
+artifacts/
+cache/
+typechain/
+typechain-types/
+
+# Env / secrets
+.env
+.env.local
+.env.*.local
+
+# VSCode / editor
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+logs/
+*.log
+log.txt
+
+# Coverage
+coverage/
+coverage.json
+lcov.info
+
+# Docker
+*.pid
+.tmp/

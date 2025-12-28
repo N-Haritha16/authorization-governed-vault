@@ -1,47 +1,63 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "./AuthorizationManager.sol";
+interface IAuthorizationManager {
+    function verifyAuthorization(
+        address recipient,
+        uint256 amount,
+        bytes32 authId,
+        bytes calldata signature
+    ) external returns (bool);
+}
 
 contract SecureVault {
-    AuthorizationManager public authorizationManager;
+    IAuthorizationManager public immutable authorizationManager;
 
-    event Deposit(address indexed from, uint256 amount);
-    event Withdrawal(address indexed to, uint256 amount);
+    // Simple internal accounting (per user)
+    mapping(address => uint256) public balances;
 
-    constructor(address authManager) {
-        authorizationManager = AuthorizationManager(authManager);
+    event Deposited(address indexed from, uint256 amount);
+    event Withdrawn(address indexed to, uint256 amount, bytes32 indexed authId);
+
+    constructor(address _authorizationManager) {
+        require(_authorizationManager != address(0), "auth mgr zero");
+        authorizationManager = IAuthorizationManager(_authorizationManager);
     }
 
+    // Accept deposits, track per-sender
     receive() external payable {
-        // Accept deposits
-        emit Deposit(msg.sender, msg.value);
+        balances[msg.sender] += msg.value;
+        emit Deposited(msg.sender, msg.value);
     }
 
+    /// @notice Withdraw funds after passing authorization validation.
+    /// @param recipient Receiver address.
+    /// @param amount Amount to withdraw.
+    /// @param authId Unique authorization id.
+    /// @param signature Off-chain authorization signature.
     function withdraw(
         address recipient,
         uint256 amount,
-        uint256 nonce,
-        uint256 expiry,
+        bytes32 authId,
         bytes calldata signature
     ) external {
-        require(address(this).balance >= amount, "Insufficient vault balance");
-
-        // Request authorization validation
-        bool allowed = authorizationManager.verifyAuthorization(
-            address(this),
+        // 1. Ask manager to validate (includes replay protection)
+        bool ok = authorizationManager.verifyAuthorization(
             recipient,
             amount,
-            nonce,
-            expiry,
+            authId,
             signature
         );
+        require(ok, "authorization failed");
 
-        require(allowed, "Authorization failed");
+        // 2. Update internal accounting BEFORE transfer
+        require(balances[recipient] >= amount, "insufficient balance");
+        balances[recipient] -= amount;
 
-        // Transfer funds
-        payable(recipient).transfer(amount);
+        // 3. Transfer funds
+        (bool success, ) = recipient.call{value: amount}("");
+        require(success, "transfer failed");
 
-        emit Withdrawal(recipient, amount);
+        emit Withdrawn(recipient, amount, authId);
     }
 }

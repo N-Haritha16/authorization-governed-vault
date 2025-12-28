@@ -1,82 +1,61 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+
 contract AuthorizationManager {
-    address public vault;
-    address public signer;
+    using ECDSA for bytes32;
 
-    // Stores authorization identifiers
-    mapping(bytes32 => bool) private consumed;
+    address public immutable vault;
+    address public immutable authSigner; // trusted off-chain signer
 
-    modifier onlyVault() {
-        require(msg.sender == vault, "Only vault allowed");
-        _;
-    }
+    // authId -> used?
+    mapping(bytes32 => bool) public usedAuthorizations;
 
-    constructor(address _signer) {
-        signer = _signer;
-    }
+    event AuthorizationUsed(bytes32 indexed authId, address indexed recipient, uint256 amount);
 
-    function setVault(address _vault) external {
-        require(vault == address(0), "Vault already set");
+    error InvalidSignature();
+    error AuthorizationAlreadyUsed();
+    error NotVault();
+
+    constructor(address _vault, address _authSigner) {
+        require(_vault != address(0), "vault zero");
+        require(_authSigner != address(0), "signer zero");
         vault = _vault;
+        authSigner = _authSigner;
     }
 
-    // Confirms whether a withdrawal is permitted
-    // Parameters encode:
-    // - vault address
-    // - recipient
-    // - amount
-    // - unique authorization identifier (nonce)
-    // - signature data
+    /// @notice Called ONLY by the vault to validate a withdrawal authorization.
+    /// @param recipient Receiver of funds.
+    /// @param amount Amount to withdraw.
+    /// @param authId Unique authorization identifier (nonce).
+    /// @param signature Off-chain signature from `authSigner`.
     function verifyAuthorization(
-        address vaultAddress,
         address recipient,
         uint256 amount,
-        uint256 nonce,
-        uint256 expiry,
+        bytes32 authId,
         bytes calldata signature
-    ) external onlyVault returns (bool) {
-        require(block.timestamp <= expiry, "Authorization expired");
+    ) external returns (bool) {
+        if (msg.sender != vault) revert NotVault();
+        if (usedAuthorizations[authId]) revert AuthorizationAlreadyUsed();
 
-        bytes32 authHash = keccak256(
-            abi.encode(
-                vaultAddress,
+        // Bind to: manager, vault, chainId, recipient, amount, authId
+        bytes32 msgHash = keccak256(
+            abi.encodePacked(
+                address(this),
+                vault,
                 block.chainid,
                 recipient,
                 amount,
-                nonce,
-                expiry
+                authId
             )
         );
+        bytes32 ethSigned = msgHash.toEthSignedMessageHash();
+        address recovered = ethSigned.recover(signature);
+        if (recovered != authSigner) revert InvalidSignature();
 
-        require(!consumed[authHash], "Authorization already used");
-
-        bytes32 ethMessage = keccak256(
-            abi.encodePacked("\x19Ethereum Signed Message:\n32", authHash)
-        );
-
-        require(_recover(ethMessage, signature) == signer, "Invalid signature");
-
-        // Mark authorization as consumed
-        consumed[authHash] = true;
-
+        usedAuthorizations[authId] = true;
+        emit AuthorizationUsed(authId, recipient, amount);
         return true;
-    }
-
-    function _recover(bytes32 hash, bytes memory sig) internal pure returns (address) {
-        require(sig.length == 65, "Invalid signature");
-
-        bytes32 r;
-        bytes32 s;
-        uint8 v;
-
-        assembly {
-            r := mload(add(sig, 32))
-            s := mload(add(sig, 64))
-            v := byte(0, mload(add(sig, 96)))
-        }
-
-        return ecrecover(hash, v, r, s);
     }
 }
