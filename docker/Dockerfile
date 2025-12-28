@@ -2,14 +2,15 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-COPY package.json ./
+# install deps
+COPY package.json package-lock.json ./
 RUN npm install
 
+# copy project
 COPY . .
 
-RUN npx hardhat compile
+# make sure entrypoint is executable
+RUN chmod +x docker/entrypoint.sh
 
-COPY docker/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
-
-ENTRYPOINT ["/entrypoint.sh"]
+# run your script on container start
+CMD ["sh", "./docker/entrypoint.sh"]
