@@ -36,3 +36,6 @@ lcov.info
 # Docker
 *.pid
 .tmp/
+node_modules/
+artifacts/
+cache/
