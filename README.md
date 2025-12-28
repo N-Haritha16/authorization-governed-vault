@@ -1,163 +1,152 @@
-## Authorization-Governed Secure Vault
+# Authorization-Governed Secure Vault
 
 ## Overview
 
 This project implements an authorization-governed on-chain vault that allows controlled withdrawals of pooled funds.
 Withdrawals are not executed freely; instead, each withdrawal must be explicitly authorized off-chain and validated on-chain before funds are released.
 
-The system is designed to demonstrate:
+The system demonstrates:
 
-- secure smart-contract architecture
+- Secure smart contract architecture  
+- Replay-attack prevention  
+- Clear separation of responsibilities  
+- Correct handling of adversarial scenarios  
 
-- replay-attack prevention
+All components run locally using Docker, and the entire system is deployed automatically using Docker Compose.
 
-- clear separation of responsibilities
-
-- correct handling of adversarial scenarios
-
-All components run locally using Docker, and the entire system is deployed automatically using docker-compose.
+---
 
 ## High-Level Architecture
 
-The system consists of two smart contracts and supporting infrastructure:
+User  
+│  
+│ (withdrawal request)  
+▼  
+Off-chain Signer  
+│  
+│ (signed authorization)  
+▼  
+AuthorizationManager (on-chain)  
+│  
+│ (verification + replay protection)  
+▼  
+SecureVault (on-chain)  
+│  
+│ (fund transfer)  
+▼  
+Recipient  
 
-User
- │
- │ (withdrawal request)
- ▼
-Off-chain Signer
- │
- │ (signed authorization)
- ▼
-AuthorizationManager (on-chain)
- │
- │ (verification + replay protection)
- ▼
-SecureVault (on-chain)
- │
- │ (fund transfer)
- ▼
-Recipient
+---
 
 ## Smart Contract Components
 
-1. SecureVault
+### 1. SecureVault
 
-Responsibilities
+**Responsibilities**
+- Holds pooled ETH  
+- Accepts deposits  
+- Executes withdrawals only after authorization validation  
+- Emits deposit and withdrawal events  
 
-- Holds pooled ETH
+**Key Properties**
+- Does not perform signature validation itself  
+- Delegates permission checks to AuthorizationManager  
+- Prevents overdrafts  
 
-- Accepts deposits
+---
 
-- Executes withdrawals only after authorization validation
+### 2. AuthorizationManager
 
-- Emits deposit and withdrawal events
+**Responsibilities**
+- Verifies withdrawal authorizations  
+- Ensures each authorization is used only once  
+- Prevents replay attacks  
+- Confirms signature authenticity  
 
-Key Properties
+**Key Properties**
+- Stores consumed authorization identifiers  
+- Only the vault contract can consume an authorization  
+- Authorizations are cryptographically bound to execution context  
 
--Does not perform signature validation itself
+---
 
--Delegates permission checks to AuthorizationManager
+## Authorization Design
 
--Prevents overdrafts
+Each withdrawal authorization is bound to:
 
-2. AuthorizationManager
-
-Responsibilities
-
-- Verifies withdrawal authorizations
-
-- Ensures each authorization is used only once
-
-- Prevents replay attacks
-
-- Confirms signature authenticity
-
-Key Properties
-
-- Stores consumed authorization identifiers
-
-- Only the vault contract can consume an authorization
-
-- Authorizations are cryptographically bound to context
-
-Authorization Design
-
-Each withdrawal authorization is bound to the following parameters:
-
-- Vault contract address
-
-- Chain ID
-
-- Recipient address
-
-- Withdrawal amount
-
-- Unique nonce
-
-- Expiry timestamp
+- Vault contract address  
+- Chain ID  
+- Recipient address  
+- Withdrawal amount  
+- Unique nonce  
+- Expiry timestamp  
 
 These parameters are hashed and signed off-chain by a trusted signer.
-On-chain verification ensures that the authorization cannot be reused, cannot be forged, and cannot be replayed on another chain or vault.
+On-chain verification ensures authorizations cannot be forged, reused, or replayed on a different chain or vault.
+
+---
 
 ## Replay Protection
 
 Replay attacks are prevented by:
 
-- Deriving a unique authorization hash from all contextual parameters
+- Deriving a unique authorization hash from all contextual parameters  
+- Recording consumed authorizations on-chain  
+- Rejecting any attempt to reuse an authorization  
 
-- Recording consumed authorizations on-chain
+Once an authorization is consumed, it becomes permanently invalid.
 
-- Rejecting any attempt to reuse an authorization
-
-Once an authorization is consumed, it is permanently invalid.
+---
 
 ## Events
 
 The system emits the following events for transparency and auditing:
 
-- Deposit(address from, uint256 amount)
+- `Deposit(address from, uint256 amount)`
+- `Withdrawal(address to, uint256 amount)`
 
-- Withdrawal(address to, uint256 amount)
+---
 
 ## Project Structure
 
 /
 ├─ contracts/
-│  ├─ SecureVault.sol
-│  └─ AuthorizationManager.sol
+│ ├─ SecureVault.sol
+│ └─ AuthorizationManager.sol
 │
 ├─ scripts/
-│  └─ deploy.js
+│ └─ deploy.js
 │
 ├─ tests/
-│  └─ system.spec.js
+│ └─ system.spec.js
 │
 ├─ docker/
-│  ├─ Dockerfile
-│  └─ entrypoint.sh
+│ ├─ Dockerfile
+│ └─ entrypoint.sh
 │
 ├─ docker-compose.yml
 └─ README.md
 
+
+---
+
 ## Running the Project
 
-Prerequisites
+### Prerequisites
+- Docker  
+- Docker Compose  
 
-- Docker
+No local blockchain or Node.js installation is required.
 
-- Docker Compose
+### Start the System
 
-No local blockchain or node installation is required.
-
-## Start the System
 
 docker-compose up --build
 
 
 This command will:
 
-1. Start a local EVM blockchain
+1. Start a local EVM-compatible blockchain
 
 2. Compile all smart contracts
 
@@ -167,10 +156,32 @@ This command will:
 
 5. Wire the vault to the authorization manager
 
-No manual deployment steps are needed.
+6. No manual deployment steps are required.
+
+7. Local Validation (Manual)
+
+## After the system is running, you can verify deployment using the Hardhat console:
+
+npx hardhat console --network localhost
 
 
-## Testing (Optional but Recommended)
+Inside the console:
+
+const signers = await ethers.getSigners();
+signers[0].address;
+
+
+This confirms:
+
+1. The blockchain is running correctly
+
+2. Accounts are accessible
+
+3. Deployment completed successfully
+
+Note: Port 8545 exposes a JSON-RPC endpoint, not a browser-based UI.
+
+## Testing (Optional)
 
 If you wish to run tests locally (outside Docker):
 
@@ -179,43 +190,44 @@ npx hardhat test
 
 The test suite verifies:
 
-1. successful authorized withdrawal
+1. Successful authorized withdrawal
 
-2. prevention of replay attacks
+2. Prevention of replay attacks
 
-3. rejection of invalid authorizations
+3. Rejection of invalid authorizations
 
-## Security Considerations
+4. Security Considerations
 
-1. Unauthorized withdrawals are rejected
+5. Unauthorized withdrawals are rejected
 
-2. Expired authorizations are rejected
+6. Expired authorizations are rejected
 
-3. Replay attacks are prevented on-chain
+7. Replay attacks are prevented on-chain
 
-4. Signature forgery is prevented via ECDSA recovery
+8. Signature forgery is prevented via ECDSA recovery
 
-5. Chain-specific binding prevents cross-chain replay
+9.Chain-specific binding prevents cross-chain replay
 
 ## Assumptions
 
-- A single trusted signer issues authorizations
+A single trusted signer issues authorizations
 
-- The vault manages ETH only
+The vault manages ETH only
 
-- This implementation targets a local development environment
+The system targets a local development environment
 
-- Gas optimization is not the primary focus
+Gas optimization is not the primary focus
 
-## Known Limitations
+Known Limitations
 
-- Multi-signer authorization is not implemented
+Multi-signer authorization is not implemented
 
-- Authorization revocation is not supported after issuance
+Authorization revocation is not supported after issuance
 
-- ERC-20 support is not included
+ERC-20 token support is not included
 
 ## Conclusion
 
-1. This project demonstrates a secure and extensible pattern for authorization-based asset withdrawals on Ethereum.
-2. It emphasizes correctness, clarity, and defense against common attack vectors while maintaining clean separation of concerns.
+This project demonstrates a secure and extensible pattern for authorization-based asset withdrawals on Ethereum.
+It emphasizes correctness, clarity, and defense against common attack vectors while maintaining a clean separation of concerns.
+
