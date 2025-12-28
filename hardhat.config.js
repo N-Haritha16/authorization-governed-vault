@@ -7,7 +7,7 @@ module.exports = {
       url: "http://localhost:8545"
     },
     docker: {
-      url: "http://local-blockchain:8545"
+      url: "http://blockchain:8545"
     }
   }
 };

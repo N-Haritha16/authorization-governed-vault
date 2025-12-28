@@ -23,5 +23,4 @@ services:
     container_name: vault-deployer
     depends_on:
       - blockchain
-    environment:
-      - HARDHAT_NETWORK=localhost
+    command: npx hardhat run scripts/deploy.js --network docker
