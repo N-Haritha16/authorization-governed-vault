@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 interface IAuthorizationManager {
     function verifyAuthorization(
+        address vault,
         address recipient,
         uint256 amount,
         bytes32 authId,
@@ -11,53 +12,39 @@ interface IAuthorizationManager {
 }
 
 contract SecureVault {
-    IAuthorizationManager public immutable authorizationManager;
+    IAuthorizationManager public authManager;
 
-    // Simple internal accounting (per user)
-    mapping(address => uint256) public balances;
+    event Deposit(address indexed from, uint256 amount);
+    event Withdrawal(address indexed to, uint256 amount);
 
-    event Deposited(address indexed from, uint256 amount);
-    event Withdrawn(address indexed to, uint256 amount, bytes32 indexed authId);
-
-    constructor(address _authorizationManager) {
-        require(_authorizationManager != address(0), "auth mgr zero");
-        authorizationManager = IAuthorizationManager(_authorizationManager);
+    constructor(address _authManager) {
+        authManager = IAuthorizationManager(_authManager);
     }
 
-    // Accept deposits, track per-sender
     receive() external payable {
-        balances[msg.sender] += msg.value;
-        emit Deposited(msg.sender, msg.value);
+        emit Deposit(msg.sender, msg.value);
     }
 
-    /// @notice Withdraw funds after passing authorization validation.
-    /// @param recipient Receiver address.
-    /// @param amount Amount to withdraw.
-    /// @param authId Unique authorization id.
-    /// @param signature Off-chain authorization signature.
     function withdraw(
-        address recipient,
+        address payable recipient,
         uint256 amount,
         bytes32 authId,
         bytes calldata signature
     ) external {
-        // 1. Ask manager to validate (includes replay protection)
-        bool ok = authorizationManager.verifyAuthorization(
-            recipient,
-            amount,
-            authId,
-            signature
+        require(
+            authManager.verifyAuthorization(
+                address(this),
+                recipient,
+                amount,
+                authId,
+                signature
+            ),
+            "Authorization failed"
         );
-        require(ok, "authorization failed");
 
-        // 2. Update internal accounting BEFORE transfer
-        require(balances[recipient] >= amount, "insufficient balance");
-        balances[recipient] -= amount;
-
-        // 3. Transfer funds
         (bool success, ) = recipient.call{value: amount}("");
-        require(success, "transfer failed");
+        require(success, "Transfer failed");
 
-        emit Withdrawn(recipient, amount, authId);
+        emit Withdrawal(recipient, amount);
     }
 }

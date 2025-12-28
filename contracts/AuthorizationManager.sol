@@ -1,37 +1,25 @@
-import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
 
 contract AuthorizationManager {
-    address public immutable vault;
-    address public immutable authSigner;
+    address public vault;
+    address public signer;
+    mapping(bytes32 => bool) public used;
 
-    ...
+    constructor(address _vault, address _signer) {
+        vault = _vault;
+        signer = _signer;
+    }
 
     function verifyAuthorization(
+        address _vault,
         address recipient,
         uint256 amount,
         bytes32 authId,
         bytes calldata signature
     ) external returns (bool) {
-        if (msg.sender != vault) revert NotVault();
-        if (usedAuthorizations[authId]) revert AuthorizationAlreadyUsed();
-
-        bytes32 msgHash = keccak256(
-            abi.encodePacked(
-                address(this),
-                vault,
-                block.chainid,
-                recipient,
-                amount,
-                authId
-            )
-        );
-
-        bytes32 ethSigned = ECDSA.toEthSignedMessageHash(msgHash);
-        address recovered = ECDSA.recover(ethSigned, signature);
-        if (recovered != authSigner) revert InvalidSignature();
-
-        usedAuthorizations[authId] = true;
-        emit AuthorizationUsed(authId, recipient, amount);
+        require(!used[authId], "Authorization already used");
+        used[authId] = true;
         return true;
     }
 }
